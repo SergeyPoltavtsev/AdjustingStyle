@@ -11,7 +11,7 @@ from PIL import Image
 content_sound = "sound/content_fcjf0_SA1.WAV"
 style_sound = "sound/style_mcpm0_SA1.WAV"
 
-model_weights_path = '/Users/Sergey/Thesis/Projects/neural-art-tf/models/vgg'
+model_weights_path = '/home/ubuntu/vgg'
 
 # content_weights_path = "/Volumes/Storage/Datasets/TIMIT/Phonemes/fc7/p_weights.npy"
 # content_bias_path = "/Volumes/Storage/Datasets/TIMIT/Phonemes/fc7/p_bias.npy"
@@ -39,7 +39,7 @@ device="/cpu:0"
 windowSize = 256
 frameStep = 64
 
-num_iters = 5000
+num_iters = 50000
 
 def SeparateIntoChunksAndSave(sound, folder):
     #creating sequence of images
@@ -59,89 +59,103 @@ def SeparateIntoChunksAndSave(sound, folder):
         
 
 SeparateIntoChunksAndSave(content_sound, images_folder)
+SeparateIntoChunksAndSave(style_sound, style_images_folder)
 
 print "Loading parameters"
 params = np.load(model_weights_path).item()
-content_weights = np.load(content_weights_path)
-content_bias = np.load(content_bias_path)
-style_weights = np.load(style_weights_path)
-style_bias = np.load(style_bias_path)
-
-chunk_number = 78
-test_image = images_folder + "/" + "78.png"
-img = spectograms.ReadRGB(test_image)
+#content_weights = np.load(content_weights_path)
+#content_bias = np.load(content_bias_path)
+#style_weights = np.load(style_weights_path)
+#style_bias = np.load(style_bias_path)
 
 
-g = tf.Graph()
-content_image = ut.process_image(img)
-wanted_style = np.array([[0,0,0,0,0,0,0,0,0,1.0]])
-with g.device(device), g.as_default(), tf.Session(graph=g, config=tf.ConfigProto(allow_soft_placement=True)) as sess:
+for chunk_number in range(89,90):
+    print
+    #print "CHUNK NUMBER: " + str(chunk_number)
+    #i_img_path = images_folder + "/" + str(chunk_number) + ".png"
+    #img = spectograms.ReadRGB(i_img_path)
+
+    #TEST
+    chunk_number = 549
+    test_image = images_folder + "/" + "549.png"
+    img = spectograms.ReadRGB(test_image)
     
-    print "Load content values and calculate style and content softmaxes"
-    #content
-    cW = tf.constant(content_weights)
-    cB = tf.constant(content_bias)
-    #style
-    sW = tf.constant(style_weights)
-    sB = tf.constant(style_bias)
-    wanted_style = tf.constant(wanted_style, tf.float32)
+    style_image_path = style_images_folder + "/" + "579.png"
+    style_img = spectograms.ReadRGB(style_image_path)
+    style_image = ut.process_image(style_img)
 
-    image = tf.constant(content_image)
-    model = models.getModel(image, params)
-    fc7_image_val = sess.run(model.y())
-
-    content_values= tf.nn.softmax(tf.matmul(fc7_image_val,cW) + cB)
-    #style_values= tf.nn.softmax(tf.matmul(fc7_image_val,sW) + sB)
-
-    print "Generate noise"
-    #gen_image = tf.Variable(tf.truncated_normal(content_image.shape, stddev=20), trainable=True, name='gen_image')
-    gen_image = tf.Variable(tf.constant(np.array(content_image, dtype=np.float32)), trainable=True, name='gen_image')
-    model = models.getModel(gen_image, params)
-    fc7_gen_image_val = model.y()
-
-    content_transformed_values= tf.nn.softmax(tf.matmul(fc7_gen_image_val,cW) + cB)
-    style_transformed_values= tf.nn.softmax(tf.matmul(fc7_gen_image_val,sW) + sB)
-
-
-    L_Content = 0.0
-    L_Style = 0.0
-    #L_Content += tf.nn.l2_loss(fc7_gen_image_val - fc7_image_val)
-
-    L_Content += tf.nn.l2_loss(content_transformed_values - content_values)
-    L_Style += tf.nn.l2_loss(style_transformed_values - wanted_style)
-
-    # The loss
-    L=L_Content + L_Style
+    g = tf.Graph()
+    content_image = ut.process_image(img)
+    #wanted_style = np.array([[0,0,0,0,0,0,0,0,0,1.0]])
+    with g.device(device), g.as_default(), tf.Session(graph=g, config=tf.ConfigProto(allow_soft_placement=True)) as sess:
     
-    # The optimizer
-    global_step = tf.Variable(0, trainable=False)
-    learning_rate = tf.train.exponential_decay(learning_rate=0.5, global_step=global_step, 
+        print "Load content values and calculate style and content softmaxes"
+        #content
+        #cW = tf.constant(content_weights)
+        #cB = tf.constant(content_bias)
+        #style
+        #sW = tf.constant(style_weights)
+        #sB = tf.constant(style_bias)
+        #wanted_style = tf.constant(wanted_style, tf.float32)
+
+        image = tf.constant(style_image)
+        model = models.getModel(image, params)
+        fc7_image_val = sess.run(model.y())
+
+        #content_values= tf.nn.softmax(tf.matmul(fc7_image_val,cW) + cB)
+        ##style_values= tf.nn.softmax(tf.matmul(fc7_image_val,sW) + sB)
+
+        print "Generate noise"
+        ##gen_image = tf.Variable(tf.truncated_normal(content_image.shape, stddev=20), trainable=True, name='gen_image')
+
+        gen_image = tf.Variable(tf.constant(np.array(content_image, dtype=np.float32)), trainable=True, name='gen_image')
+        ##gen_image = tf.Variable(tf.constant(np.array(style_image, dtype=np.float32)), trainable=True, name='gen_image')
+        
+        model_gen = models.getModel(gen_image, params)
+        fc7_gen_image_val = model_gen.y()
+
+        #content_transformed_values= tf.nn.softmax(tf.matmul(fc7_gen_image_val,cW) + cB)
+        #style_transformed_values= tf.nn.softmax(tf.matmul(fc7_gen_image_val,sW) + sB)
+
+        L = 0.0
+        #L_Content = 0.0
+        #L_Style = 0.0
+        L += tf.nn.l2_loss(fc7_gen_image_val - fc7_image_val)
+
+        #L_Content += tf.nn.l2_loss(content_transformed_values - content_values)
+        #L_Style += tf.nn.l2_loss(style_transformed_values - wanted_style)
+
+        # The loss
+        #L=L_Content + L_Style*10000000000000
+    
+        # The optimizer
+        global_step = tf.Variable(0, trainable=False)
+        learning_rate = tf.train.exponential_decay(learning_rate=0.1, global_step=global_step, 
                                                decay_steps=100, decay_rate=0.94, staircase=True)
-    train_step = tf.train.AdamOptimizer(learning_rate).minimize(L, global_step=global_step)
+        train_step = tf.train.AdamOptimizer(learning_rate).minimize(L, global_step=global_step)
 
-    tf.scalar_summary("L_content", L_Content)
+        #tf.scalar_summary("L_content", L_Content)
 
-    print "Start calculation..."
-    # The optimizer has variables that require initialization as well
-    sess.run(tf.initialize_all_variables())
-    for i in range(num_iters):
-        if i % 10 == 0:
-            gen_image_val = sess.run(gen_image)
-
-            #saving image
-            img = gen_image_val.copy()
-            img = ut.add_mean(img)
-            img = np.clip(img[0, ...],0,255).astype(np.uint8)
-            p = transformed_images_folder + "/" + str(chunk_number) + "_" +  str(i) + ".png"
-            #save_image(gen_image_val, i, transformed_images_folder)
-            spectograms.SaveRGB(img, p)
-            print "L_content", sess.run(L_Content)
-            print "L_style", sess.run(L_Style)
-            print "L", sess.run(L)
-            # Increment summary
-            #sess.run(tf.assign(gen_image_addmean, add_mean(gen_image_val)))
-            #summary_str = sess.run(summary_op)
-            #summary_writer.add_summary(summary_str, i)
-        print "Iter:", i
-        sess.run(train_step)
-    
+        print "Start calculation..."
+        # The optimizer has variables that require initialization as well
+        sess.run(tf.initialize_all_variables())
+        for i in range(num_iters):
+            if i % 10 == 0:
+                print "Iter:", i
+                #print "L_content", sess.run(L_Content)
+                #print "L_style", sess.run(L_Style)
+                print "L", sess.run(L)
+                # Increment summary
+                #sess.run(tf.assign(gen_image_addmean, add_mean(gen_image_val)))
+                #summary_str = sess.run(summary_op)
+                #summary_writer.add_summary(summary_str, i)
+            if i % 50 == 0:
+                gen_image_val = sess.run(gen_image)
+                #saving image
+                img = gen_image_val.copy()
+                img = ut.add_mean(img)
+                img = np.clip(img[0, ...],0,255).astype(np.uint8)
+                p = transformed_images_folder + "/" + str(chunk_number) + "_" + str(i) + ".png"
+                #save_image(gen_image_val, i, transformed_images_folder)
+                spectograms.SaveRGB(img, p)
+            sess.run(train_step)

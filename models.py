@@ -28,7 +28,7 @@ class VGG16(Network):
         )
 
     def y(self):
-        return self.vardict['fc7']
+        return self.vardict['pool2']
 
 def getModel(image, params_path):
     return VGG16(image, params_path)
