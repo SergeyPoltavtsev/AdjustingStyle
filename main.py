@@ -41,6 +41,14 @@ frameStep = 64
 
 num_iters = 50000
 
+#def ReshapeToVector(input_x):
+#    shape = tf.shape(input_x)
+#    dim = 1
+#    for d in shape[1:]:
+#        dim *= d
+#    x = tf.reshape(input_x, [-1, dim])
+#    return x
+
 def SeparateIntoChunksAndSave(sound, folder):
     #creating sequence of images
     wav_file = SU.PCM2Wav(sound, temp_folder)
@@ -63,10 +71,10 @@ SeparateIntoChunksAndSave(style_sound, style_images_folder)
 
 print "Loading parameters"
 params = np.load(model_weights_path).item()
-#content_weights = np.load(content_weights_path)
-#content_bias = np.load(content_bias_path)
-#style_weights = np.load(style_weights_path)
-#style_bias = np.load(style_bias_path)
+content_weights = np.load(content_weights_path)
+content_bias = np.load(content_bias_path)
+style_weights = np.load(style_weights_path)
+style_bias = np.load(style_bias_path)
 
 
 for chunk_number in range(89,90):
@@ -80,30 +88,32 @@ for chunk_number in range(89,90):
     test_image = images_folder + "/" + "549.png"
     img = spectograms.ReadRGB(test_image)
     
-    style_image_path = style_images_folder + "/" + "579.png"
-    style_img = spectograms.ReadRGB(style_image_path)
-    style_image = ut.process_image(style_img)
+    #style_image_path = style_images_folder + "/" + "579.png"
+    #style_img = spectograms.ReadRGB(style_image_path)
+    #style_image = ut.process_image(style_img)
 
     g = tf.Graph()
     content_image = ut.process_image(img)
-    #wanted_style = np.array([[0,0,0,0,0,0,0,0,0,1.0]])
+    wanted_style = np.array([[0,1.0]])
     with g.device(device), g.as_default(), tf.Session(graph=g, config=tf.ConfigProto(allow_soft_placement=True)) as sess:
     
         print "Load content values and calculate style and content softmaxes"
         #content
-        #cW = tf.constant(content_weights)
-        #cB = tf.constant(content_bias)
+        cW = tf.constant(content_weights)
+        cB = tf.constant(content_bias)
         #style
-        #sW = tf.constant(style_weights)
-        #sB = tf.constant(style_bias)
-        #wanted_style = tf.constant(wanted_style, tf.float32)
+        sW = tf.constant(style_weights)
+        sB = tf.constant(style_bias)
+        wanted_style = tf.constant(wanted_style, tf.float32)
 
-        image = tf.constant(style_image)
+        image = tf.constant(content_image)
         model = models.getModel(image, params)
-        fc7_image_val = sess.run(model.y())
-
-        #content_values= tf.nn.softmax(tf.matmul(fc7_image_val,cW) + cB)
-        ##style_values= tf.nn.softmax(tf.matmul(fc7_image_val,sW) + sB)
+        pool2_image_val = sess.run(model.y())
+	#fc7_image_val = sess.run(model.y())
+	reshaped_pool2_image_val = tf.reshape(pool2_image_val, [-1, 401408])
+#ReshapeToVector(pool2_image_val)
+        content_values= tf.nn.softmax(tf.matmul(reshaped_pool2_image_val,cW) + cB)
+        ##style_values= tf.nn.softmax(tf.matmul(pool2_image_val,sW) + sB)
 
         print "Generate noise"
         ##gen_image = tf.Variable(tf.truncated_normal(content_image.shape, stddev=20), trainable=True, name='gen_image')
@@ -112,21 +122,26 @@ for chunk_number in range(89,90):
         ##gen_image = tf.Variable(tf.constant(np.array(style_image, dtype=np.float32)), trainable=True, name='gen_image')
         
         model_gen = models.getModel(gen_image, params)
-        fc7_gen_image_val = model_gen.y()
+        pool2_gen_image_val = model_gen.y()
+	reshaped_pool2_gen_image_val = tf.reshape(pool2_gen_image_val, [-1, 401408]) 
+#ReshapeToVector(pool2_gen_image_val)
 
-        #content_transformed_values= tf.nn.softmax(tf.matmul(fc7_gen_image_val,cW) + cB)
-        #style_transformed_values= tf.nn.softmax(tf.matmul(fc7_gen_image_val,sW) + sB)
+        content_transformed_values= tf.nn.softmax(tf.matmul(reshaped_pool2_gen_image_val,cW) + cB)
+        style_transformed_values= tf.nn.softmax(tf.matmul(reshaped_pool2_gen_image_val,sW) + sB)
 
         L = 0.0
-        #L_Content = 0.0
-        #L_Style = 0.0
-        L += tf.nn.l2_loss(fc7_gen_image_val - fc7_image_val)
+        L_Content = 0.0
+        L_Style = 0.0
+        #L += tf.nn.l2_loss(fc7_gen_image_val - fc7_image_val)
 
+
+	L_Content += -tf.reduce_sum(content_values*tf.log(tf.clip_by_value(content_transformed_values,1e-10,1.0)))
+	L_Style += -tf.reduce_sum(wanted_style*tf.log(tf.clip_by_value(style_transformed_values,1e-10,1.0)))
         #L_Content += tf.nn.l2_loss(content_transformed_values - content_values)
         #L_Style += tf.nn.l2_loss(style_transformed_values - wanted_style)
 
         # The loss
-        #L=L_Content + L_Style*10000000000000
+        L=L_Content + L_Style
     
         # The optimizer
         global_step = tf.Variable(0, trainable=False)
@@ -142,8 +157,8 @@ for chunk_number in range(89,90):
         for i in range(num_iters):
             if i % 10 == 0:
                 print "Iter:", i
-                #print "L_content", sess.run(L_Content)
-                #print "L_style", sess.run(L_Style)
+                print "L_content", sess.run(L_Content)
+                print "L_style", sess.run(L_Style)
                 print "L", sess.run(L)
                 # Increment summary
                 #sess.run(tf.assign(gen_image_addmean, add_mean(gen_image_val)))
